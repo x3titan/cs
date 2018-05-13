@@ -49,19 +49,6 @@ namespace import4D {
             System.IO.FileStream fs = null;
             System.IO.BinaryReader reader;
 
-            if (!System.IO.File.Exists(filename)) {
-                log.writeLogWarning("文件不存在, filename=" + filename);
-                return false;
-            }
-            try {
-                fs = new System.IO.FileStream(filename, System.IO.FileMode.Open);
-            } catch (Exception ex) {
-                log.writeLogWarning("无法读取文件,reason="+ ex.Message +", filename=" + filename);
-                return false;
-            }
-            reader = new System.IO.BinaryReader(fs, System.Text.Encoding.GetEncoding("GBK"));
-
-
             //===============================
             //0:xDR_ID 一个会话生成一个xDR ID。>> 无用
             //1:IMSI 用户IMSI（TBCD编码） >> 15位
@@ -93,17 +80,81 @@ namespace import4D {
             //00008810745a37722dd5,460008072539994,8613758069490,  28010507, OTA.ZJ.mnc000.mcc460.gprs,      100,1524598898731,1524598906076,13,40,  104.13.201.144,49839,0, 106.11.248.1,   80,  120, 0, 2, 0, 2, 1,  2
             //00008210545a67994584,460002605393612,8613927041963,  141269025,BOSSTJFT.GD.mnc000.mcc460.gprs, 100,1524611225191,1524611225191,12,1,   10.144.76.65,  52318,0, 123.151.10.164, 443, 1215,0, 1, 0, 0, 1,  2
 
-            char[] buff = reader.ReadChars(1000);
-
-            log.writeLogCommon(new string(buff));
+            //char[] buff = reader.ReadChars(10000);
+            //log.writeLogCommon(new string(buff));
 
             //大方向：读取入库至apnDay180
-            
-            //10. 初始化内存手机表
-            
-            //20. 扫描文件获取手机号列表
 
+            //10. 初始化内存手机表
+            log.writeLogCommon("====10.初始化内存手机表====");
+            PhoneNumber phoneNumberList = new PhoneNumber();
+            phoneNumberList.init();
+
+            //20. 扫描文件获取手机号列表
+            log.writeLogCommon("====20.扫描文件获取手机号列表====");
+            if (!System.IO.File.Exists(filename)) {
+                log.writeLogWarning("文件不存在, filename=" + filename);
+                return false;
+            }
+            try {
+                fs = new System.IO.FileStream(filename, System.IO.FileMode.Open);
+            } catch (Exception ex) {
+                log.writeLogWarning("无法读取文件,reason=" + ex.Message + ", filename=" + filename);
+                return false;
+            }
+            reader = new System.IO.BinaryReader(fs, System.Text.Encoding.GetEncoding("GBK"));
+            string buff = "";
+            string oneLine;
+            int lineStartPos, sp, sp1;
+            int buffSize = 10000;
+            int batchCount = 0, linesCount = 0;
+            Int64 bytesRead = 0;
+            while (true) {
+                Application.DoEvents();
+                if (forceExit) break;
+                if (batchCount % 1000 == 0) {
+                    log.logDisplay.sameLine();
+                    log.writeLogCommon("批次:" + batchCount.ToString("N0") +
+                        " / 处理字符:" + bytesRead / 1000000 + "M" +
+                        " / 读取记录:" + linesCount.ToString("N0") +
+                        " / 手机号:" + phoneNumberList.items.Count.ToString("N0")
+                        );
+                }
+
+                //read one batch
+                string fBuff = new string(reader.ReadChars(buffSize));
+                bytesRead += fBuff.Length;
+                if (fBuff.Length <= 0) break; //eof
+                buff += fBuff.Replace("\r\n", "\n").Replace('\r', '\n');
+                lineStartPos = 0;
+                batchCount++;
+                //if (batchCount > 50) break;
+                while (true) {
+                    //read line
+                    sp = buff.IndexOf('\n', lineStartPos);
+                    if (sp < 0) break;
+                    oneLine = buff.Substring(lineStartPos, sp - lineStartPos);
+                    lineStartPos = sp + 1;
+                    linesCount++;
+                    //decode line
+                    string[] fields = oneLine.Split(',');
+                    if (fields.Length != 22) {
+                        log.writeLogWarning("非法记录行：" + oneLine);
+                        continue;
+                    }
+                    PhoneNumber.Item phoneNumberItem = new PhoneNumber.Item();
+                    phoneNumberItem.imsi = fields[1];
+                    phoneNumberItem.phoneNumber = fields[2];
+                    phoneNumberList.push(phoneNumberItem);
+                }
+                buff = buff.Substring(lineStartPos);
+            }
+            fs.Close();
+            
             //30. 根据手机号列表创建apnDay180框架
+
+
+
 
             //35. 获取当前日期序列号
 
@@ -114,8 +165,11 @@ namespace import4D {
             //100. 完成
 
 
-            fs.Close();
             return true;
+        }
+
+        private void button2_Click(object sender, EventArgs e) {
+            forceExit = true;
         }
     }
 }

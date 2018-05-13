@@ -3959,6 +3959,41 @@ namespace TamPub1 {
         }
     }
 
+    /// <summary>二分法查找V2版本,必须指定onCompare才能使用</summary>
+    public class SpeedSearch<T> {
+        public List<T> buff = new List<T>();
+        public delegate int OnCompare(T value1, T value2);
+        /// <summary>value1>value2返回1则表示buff中元素按升序列排序,在这种情况下value1>value2返回1,value1<value2返回-1,value1=value2返回0</summary>
+        public OnCompare onCompare = null;
+        public int pos = 0;
+        /// <summary>如果没找到，（如果是升序）pos存放第一个大于此值的位置</summary>
+        public bool search(T value) {
+            pos = 0;
+            if (buff == null) return false;
+            if (buff.Count <= 0) {
+                pos = 0;
+                return false;
+            }
+            if (onCompare == null) return false;
+            int loIndex, hiIndex, cIndex, compResult;
+            loIndex = 0; hiIndex = buff.Count - 1;
+            while (true) {
+                if (loIndex > hiIndex) break;
+                cIndex = (loIndex + hiIndex) / 2;
+                compResult = onCompare(buff[cIndex], value);
+                if (compResult > 0) {
+                    hiIndex = cIndex - 1;
+                } else if (compResult < 0) {
+                    loIndex = cIndex + 1;
+                } else {
+                    pos = cIndex;
+                    return true;
+                }
+            }
+            pos = loIndex;
+            return false;
+        }
+    }
 
     /// <summary>
     /// 古老的LCG(linear congruential generator)代表了最好的伪随机数产生器算法。主要原因是容易理解，容易实现，而且速度快。这种算法数学上基于X(n+1) = (a * X(n) + c) % m这样的公式，其中：

@@ -30,6 +30,7 @@
             this.panel2 = new System.Windows.Forms.Panel();
             this.listBox1 = new System.Windows.Forms.ListBox();
             this.timer1 = new System.Windows.Forms.Timer(this.components);
+            this.button2 = new System.Windows.Forms.Button();
             this.panel1.SuspendLayout();
             this.panel2.SuspendLayout();
             this.SuspendLayout();
@@ -44,6 +45,7 @@
             // 
             // panel1
             // 
+            this.panel1.Controls.Add(this.button2);
             this.panel1.Controls.Add(this.button1);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Top;
             this.panel1.Location = new System.Drawing.Point(0, 0);
@@ -85,6 +87,16 @@
             // 
             this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
             // 
+            // button2
+            // 
+            this.button2.Location = new System.Drawing.Point(107, 12);
+            this.button2.Name = "button2";
+            this.button2.Size = new System.Drawing.Size(75, 23);
+            this.button2.TabIndex = 1;
+            this.button2.Text = "Force Exit";
+            this.button2.UseVisualStyleBackColor = true;
+            this.button2.Click += new System.EventHandler(this.button2_Click);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
@@ -112,6 +124,7 @@
         private System.Windows.Forms.Button button1;
         private System.Windows.Forms.ListBox listBox1;
         private System.Windows.Forms.Timer timer1;
+        private System.Windows.Forms.Button button2;
     }
 }
 
