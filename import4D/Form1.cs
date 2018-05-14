@@ -110,6 +110,9 @@ namespace import4D {
             int batchCount = 0, linesCount = 0;
             Int64 bytesRead = 0;
             while (true) {
+                //test
+                if (batchCount > 5000) break;
+
                 Application.DoEvents();
                 if (forceExit) break;
                 if (batchCount % 1000 == 0) {
@@ -150,10 +153,26 @@ namespace import4D {
                 buff = buff.Substring(lineStartPos);
             }
             fs.Close();
-            
+
             //30. 根据手机号列表创建apnDay180框架
-
-
+            log.writeLogCommon("====30.根据手机号列表创建apnDay180框架====");
+            StringBuilder sql = new StringBuilder();
+            for (int i = 0; i < phoneNumberList.items.Count; i++) {
+                sql.Append(
+                    "exec [dbo].[createImsi] " +
+                    "'" + phoneNumberList.items[i].imsi + "'" +
+                    ", '" + phoneNumberList.items[i].phoneNumber + "';\r\n"
+                    );
+                if ((i % 10 != 0) && (i < phoneNumberList.items.Count - 1)) continue;
+                Application.DoEvents();
+                if (forceExit) break;
+                log.logDisplay.sameLine();
+                log.writeLogCommon(
+                    "初始化手机号:" + i.ToString("N0") + "/" + phoneNumberList.items.Count.ToString("N0")
+                    );
+                if (!execSqlN(sql.ToString())) return false;
+                sql.Clear();
+            }
 
 
             //35. 获取当前日期序列号
@@ -168,8 +187,36 @@ namespace import4D {
             return true;
         }
 
+        /// <summary>执行一个无返回值的sql语句</summary>
+        private bool execSqlN(string sql) {
+            OdbcCommand cmd = new OdbcCommand();
+            cmd.Connection = odbcConnection;
+            cmd.CommandText = sql;
+            try {
+                cmd.ExecuteNonQuery();
+            } catch (Exception ee) {
+                log.writeLogWarning("数据库执行错误，准备执行重置操作。errorString=" + ee.Message + ",sql=" + sql);
+                odbcConnection.Close();
+                return false;
+            }
+            return true;
+        }
+
         private void button2_Click(object sender, EventArgs e) {
             forceExit = true;
+        }
+
+        private void button3_Click(object sender, EventArgs e) {
+            log.writeLogWarning("尝试连接数据库");
+            try {
+                odbcConnection.ConnectionString = odbcConnectionString;
+                odbcConnection.Open();
+            } catch (Exception ee) {
+                log.writeLogWarning("数据库连接失败,errorString=" + ee.Message);
+                timer1.Enabled = true;
+                return;
+            }
+            log.writeLogWarning("数据库连接成功");
         }
     }
 }
