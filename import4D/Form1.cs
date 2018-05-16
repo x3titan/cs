@@ -326,6 +326,7 @@ namespace import4D {
             fs.Close();
             */
 
+            log.writeLogCommon("====40.扫描文件数据进入高速缓存====");
             if (!System.IO.File.Exists(filename)) {
                 log.writeLogWarning("文件不存在, filename=" + filename);
                 return false;
@@ -345,6 +346,7 @@ namespace import4D {
             while (true) {
                 Application.DoEvents();
                 if (forceExit) break;
+                //if (phoneNumberList.items.Count > 3000) break;
                 if (batchCount % 1000 == 0) {
                     log.logDisplay.sameLine();
                     log.writeLogCommon("批次:" + batchCount.ToString("N0") +
@@ -427,8 +429,68 @@ namespace import4D {
                 buff = buff.Substring(lineStartPos);
             }
             fs.Close();
-            
-            //50. 高速缓存信息入库
+
+            //45.计算数据库时间维度偏移量
+            int daySize = 90; //最多保留的天数
+            if (!dimTime.search(currentDayString)) {
+                log.writeLogWarning("文件提取时间超出范围：" + currentDayString);
+                return false;
+            }
+            int dimTimeOffset = dimTime.pos;
+            dimTimeOffset--;
+            if (dimTimeOffset < 0) dimTimeOffset = daySize - 1;
+            log.writeLogCommon("====45.计算数据库时间维度偏移量:" + dimTimeOffset + "====");
+
+            //50. 高速缓存数据入库
+            log.writeLogCommon("====50.高速缓存数据入库====");
+            sql.Clear();
+            for (int i = 0; i < phoneNumberList.items.Count; i++) {
+                Application.DoEvents();
+                if (forceExit) break;
+                if ((i % 500 == 0) || (i == phoneNumberList.items.Count - 1)) {
+                    log.logDisplay.sameLine();
+                    log.writeLogCommon(
+                        "正在入库高速缓存：" + i.ToString("N0") +
+                        " / " + phoneNumberList.items.Count.ToString("N0")
+                        );
+                    if (sql.Length > 0) {
+                        execSqlN(sql.ToString());
+                        sql.Clear();
+                    }
+                }
+                //产生更新手机表的语句
+                sql.Append(
+                    "update imsiInfo set " +
+                    " phoneNumber='" + phoneNumberList.items[i].phoneNumber + "'" +
+                    ",apn='" + phoneNumberList.items[i].apn + "'" +
+                    " where imsi='" + phoneNumberList.items[i].imsi + "';\r\n"
+                    );
+
+                //产生更新day180表的语句
+                for (int dayIndex = 0; dayIndex < 2; dayIndex++) {
+                    int dayIndexAbs = (dimTimeOffset + dayIndex) % daySize;
+                    for (int hourIndex = 0; hourIndex < 24 / 3; hourIndex++) {
+                        sql.Append(
+                            "update apnDay180 set " +
+                            " tcpUploadBytes=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].tcpUploadBytes +
+                            ",tcpDownloadBytes=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].tcpDownloadBytes +
+                            ",udpUploadBytes=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].udpUploadBytes +
+                            ",udpDownloadBytes=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].udpDownloadBytes +
+                            ",tcpUploadPackets=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].tcpUploadPackets +
+                            ",tcpDownloadPackets=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].tcpDownloadPackets +
+                            ",udpUploadPackets=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].udpUploadPackets +
+                            ",udpDownloadPackets=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].udpDownloadPackets +
+                            ",tcpRetryCount=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].tcpRetryCount +
+                            " where imsi='" + phoneNumberList.items[i].imsi + "'" +
+                            " and dayIndex=" + dayIndexAbs +
+                            " and dayHour=" + hourIndex +
+                            ";\r\n"
+                            );
+                    }
+                }
+
+            }
+
 
 
             //60. 更新当前日期序列号
