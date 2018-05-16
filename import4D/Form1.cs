@@ -15,6 +15,7 @@ namespace import4D {
         private OdbcConnection odbcConnection = new OdbcConnection();
         private TamPubWin1.LogFile log = new TamPubWin1.LogFile();
         private bool forceExit = false;
+        private bool skip = false;
 
         public Form1() {
             InitializeComponent();
@@ -22,7 +23,6 @@ namespace import4D {
         }
 
         private void button1_Click(object sender, EventArgs e) {
-
             testLoad();
         }
 
@@ -44,22 +44,27 @@ namespace import4D {
 
         }
 
+        private int dimTimeOnCompare(string value1, string value2) {
+            return value1.CompareTo(value2);
+        }
+
         private bool testLoad() {
             string filename = "D:\\tam\\project\\nokiaBigData\\s1u_gen_konw_apn\\20180425_known_apn_s1u_general.csv";
             System.IO.FileStream fs = null;
             System.IO.BinaryReader reader;
 
             //===============================
-            //0:xDR_ID 一个会话生成一个xDR ID。>> 无用
-            //1:IMSI 用户IMSI（TBCD编码） >> 15位
-            //2:MSISDN 用户号码（TBCD编码）>> 手机号,13-??位
-            //3:Cell_ID UE所在小区的ECI >> 整数？
-            //4:APN APN >> ??
-            //5:App_Type_Code 业务类型编码，参见附录D XDR类型编码定义 >> 要个编码表
+            //0:xDR_ID 一个会话生成一个xDR ID。>> 无用 >> ok
+            //1:IMSI 用户IMSI（TBCD编码） >> 15位 >> ok
+            //2:MSISDN 用户号码（TBCD编码）>> 手机号,13-??位 >> ok
+            //3:Cell_ID UE所在小区的ECI >> 整数？>> 需要增加一个跳变次数
+            //4:APN APN >> 需要入库至手机号表 >> ok
+            //5:App_Type_Code 业务类型编码，参见附录D XDR类型编码定义 >> 要个编码表 >> 还没想好怎么弄???
             //6:Procedure_Start_Time TCP/ UDP流开始时间，UTC时间 - 毫秒 >> 需要解码时间
             //7:Procedure_End_Time TCP/ UDP流结束时间，UTC时间 - 毫秒 >> 需要解码时间
-            //8:App_Type 应用大类—集团18种应用大类，参见《数据流量业务大类分类》 >> 要个编码表
-            //9:App_Sub_type 应用小类 >> 要个编码规则
+            //8:App_Type 应用大类—集团18种应用大类，参见《数据流量业务大类分类》 >> 要个编码表 >> 还没想好怎么弄???
+            //9:App_Sub_type 应用小类 >> 要个编码规则 >> 还没想好怎么弄???
+            //
             //10:USER_IPv4 终端用户的IPv4地址 >> 7-15长度
             //11:User_Port 用户的四层端口号 >> 谁是服务器，反向连接怎么表示？
             //12:L4_protocal L4协议类型：0：TCP；1：UDP >> 1位长度
@@ -84,6 +89,11 @@ namespace import4D {
             //log.writeLogCommon(new string(buff));
 
             //大方向：读取入库至apnDay180
+
+            //5. 获取文件名包含的主要日期
+            string currentDayString;
+            currentDayString = TamPub1.FileOperation.extractFileName(filename).Substring(0, 8);
+            log.writeLogCommon("====5.根据文件名获取主要日期子串为：" + currentDayString);
 
             //10. 初始化内存手机表
             log.writeLogCommon("====10.初始化内存手机表====");
@@ -110,9 +120,7 @@ namespace import4D {
             int batchCount = 0, linesCount = 0;
             Int64 bytesRead = 0;
             while (true) {
-                //test
-                if (batchCount > 5000) break;
-
+                if (skip) break;
                 Application.DoEvents();
                 if (forceExit) break;
                 if (batchCount % 1000 == 0) {
@@ -158,6 +166,7 @@ namespace import4D {
             log.writeLogCommon("====30.根据手机号列表创建apnDay180框架====");
             StringBuilder sql = new StringBuilder();
             for (int i = 0; i < phoneNumberList.items.Count; i++) {
+                if (skip) break;
                 sql.Append(
                     "exec [dbo].[createImsi] " +
                     "'" + phoneNumberList.items[i].imsi + "'" +
@@ -174,16 +183,259 @@ namespace import4D {
                 sql.Clear();
             }
 
-
             //35. 获取当前日期序列号
+            int dateSn = 0;
+            log.writeLogCommon("====35.获取当前日期序列号==== 由于未上线，此步骤跳过，人工指定日期序列号为：" + dateSn);
+
+            //37. 读取并更新日期维度表，由于目前没有上线，直接产生此表
+            log.writeLogCommon("====37.读取并更新日期维度表，由于目前没有上线，直接产生此表====");
+            TamPub1.SpeedSearch<string> dimTime = new TamPub1.SpeedSearch<string>();
+            DateTime dimTimePos = new DateTime(2018, 4, 23);
+            for (int i = 0; i < 30 * 3; i++) {
+                dimTime.buff.Add(dimTimePos.ToString("yyyyMMdd"));
+                dimTimePos = dimTimePos.AddDays(1);
+            }
+            dimTime.onCompare = dimTimeOnCompare;
 
             //40. 扫描每行产生update
+            /*
+            if (!System.IO.File.Exists(filename)) {
+                log.writeLogWarning("文件不存在, filename=" + filename);
+                return false;
+            }
+            try {
+                fs = new System.IO.FileStream(filename, System.IO.FileMode.Open);
+            } catch (Exception ex) {
+                log.writeLogWarning("无法读取文件,reason=" + ex.Message + ", filename=" + filename);
+                return false;
+            }
+            reader = new System.IO.BinaryReader(fs, System.Text.Encoding.GetEncoding("GBK"));
+            batchCount = 0;
+            bytesRead = 0;
+            linesCount = 0;
+            sql.Clear();
+            int updateCount = 0;
+            while (true) {
+                Application.DoEvents();
+                if (forceExit) break;
+                log.logDisplay.sameLine();
+                log.writeLogCommon("批次:" + batchCount.ToString("N0") +
+                    " / 处理字符:" + bytesRead / 1000000 + "M" +
+                    " / 读取记录:" + linesCount.ToString("N0")
+                    );
 
-            //50. 更新当前日期序列号
+                //read one batch
+                string fBuff = new string(reader.ReadChars(buffSize));
+                bytesRead += fBuff.Length;
+                if (fBuff.Length <= 0) break; //eof
+                buff += fBuff.Replace("\r\n", "\n").Replace('\r', '\n');
+                lineStartPos = 0;
+                batchCount++;
+                //if (batchCount > 50) break;
+                while (true) {
+                    //read line
+                    sp = buff.IndexOf('\n', lineStartPos);
+                    if (sp < 0) break;
+                    oneLine = buff.Substring(lineStartPos, sp - lineStartPos);
+                    lineStartPos = sp + 1;
+                    linesCount++;
+                    //decode line
+                    string[] fields = oneLine.Split(',');
+                    if (fields.Length != 22) {
+                        log.writeLogWarning("非法记录行：" + oneLine);
+                        continue;
+                    }
+                    //解码开始时间(忽略结束时间)
+                    DateTime startTime = decodeDatetime(fields[6]);
+
+                    //根据时间计算出时间维度坐标
+                    if (!dimTime.search(startTime.ToString("yyyyMMdd"))) {
+                        log.writeLogWarning("检测到超出维度范围的时间标记：" + oneLine);
+                        continue;
+                    }
+                    int dimTimeValue = dimTime.pos;
+
+                    //根据时间计算出时段维度坐标
+                    int dimDayHourValue = Convert.ToInt32(startTime.Hour) / 3; //目前分割为3小时一个时段
+
+                    //产生更新apn字段语句
+                    sql.Append(
+                        "update imsiInfo set apn = '" + fields[4] +
+                        "' where imsi = '" + fields[1] + "';\r\n"
+                        );
+
+                    //产生更新day180表语句
+                    //======================
+                    //12:L4_protocal L4协议类型：0：TCP；1：UDP >> 1位长度
+                    //15:UL_Data 上行流量；单位：字节 >> 整数
+                    //16:DL_Data 下行流量；单位：字节 >> 整数
+                    //17:UL_IP_Packet    上行IP包数 >> 整数
+                    //18:DL_IP_Packet    下行IP包数 >> 整数
+                    //19:TCP_Try_Cnt TCP建链尝试次数，一次TCP流多次SYN的数值; 非TCP传输时，此字段填0 >> 整数
+                    //20:TCP_Link_flag   TCP连接状态指示；0：成功；1：失败 >> 255代表什么？
+                    if (fields[12].Equals("0")) { //tcp
+                        sql.Append(
+                            "update apnDay180 set " +
+                            " tcpUploadBytes = tcpUploadBytes + " + fields[15] +
+                            ",tcpDownloadBytes = tcpDownloadBytes + " + fields[16] +
+                            ",tcpUploadPackets = tcpUploadPackets + " + fields[17] +
+                            ",tcpDownloadPackets = tcpDownloadPackets + " + fields[18] +
+                            ",tcpRetryCount = tcpRetryCount + " + fields[19] +
+                            " where" +
+                            " imsi = '" + fields[1] + "' " +
+                            " and dayIndex = " + dimTimeValue +
+                            " and dayHour = " + dimDayHourValue +
+                            ";\r\n"
+                            );
+                    } else if (fields[12].Equals("1")) { //udp
+                        sql.Append(
+                            "update apnDay180 set " +
+                            " udpUploadBytes = udpUploadBytes + " + fields[15] +
+                            ",udpDownloadBytes = udpDownloadBytes + " + fields[16] +
+                            ",udpUploadPackets = udpUploadPackets + " + fields[17] +
+                            ",udpDownloadPackets = udpDownloadPackets + " + fields[18] +
+                            " where" +
+                            " imsi = '" + fields[1] + "' " +
+                            " and dayIndex = " + dimTimeValue +
+                            " and dayHour = " + dimDayHourValue +
+                            ";\r\n"
+                            );
+                    } else {
+                        log.writeLogWarning("检测到未知类型的包结构：" + oneLine);
+                        continue;
+                    }
+                    updateCount++;
+                    //ip地址问题, 数据方向问题，数据类型问题
+
+                    //择机执行sql
+                    if (updateCount >= 500) {
+                        execSqlN(sql.ToString());
+                        updateCount = 0;
+                        sql.Clear();
+                    }
+
+                }
+                buff = buff.Substring(lineStartPos);
+            }
+            //执行尾部的sql
+            if (updateCount > 0) {
+                execSqlN(sql.ToString());
+                updateCount = 0;
+                sql.Clear();
+            }
+            fs.Close();
+            */
+
+            if (!System.IO.File.Exists(filename)) {
+                log.writeLogWarning("文件不存在, filename=" + filename);
+                return false;
+            }
+            try {
+                fs = new System.IO.FileStream(filename, System.IO.FileMode.Open);
+            } catch (Exception ex) {
+                log.writeLogWarning("无法读取文件,reason=" + ex.Message + ", filename=" + filename);
+                return false;
+            }
+            reader = new System.IO.BinaryReader(fs, System.Text.Encoding.GetEncoding("GBK"));
+            batchCount = 0;
+            bytesRead = 0;
+            linesCount = 0;
+            sql.Clear();
+            int updateCount = 0;
+            while (true) {
+                Application.DoEvents();
+                if (forceExit) break;
+                if (batchCount % 1000 == 0) {
+                    log.logDisplay.sameLine();
+                    log.writeLogCommon("批次:" + batchCount.ToString("N0") +
+                        " / 处理字符:" + bytesRead / 1000000 + "M" +
+                        " / 读取记录:" + linesCount.ToString("N0") +
+                        " / 手机号:" + phoneNumberList.items.Count.ToString("N0")
+                        );
+                }
+
+                //read one batch
+                string fBuff = new string(reader.ReadChars(buffSize));
+                bytesRead += fBuff.Length;
+                if (fBuff.Length <= 0) break; //eof
+                buff += fBuff.Replace("\r\n", "\n").Replace('\r', '\n');
+                lineStartPos = 0;
+                batchCount++;
+                //if (batchCount > 50) break;
+                while (true) {
+                    //read line
+                    sp = buff.IndexOf('\n', lineStartPos);
+                    if (sp < 0) break;
+                    oneLine = buff.Substring(lineStartPos, sp - lineStartPos);
+                    lineStartPos = sp + 1;
+                    linesCount++;
+                    //decode line
+                    string[] fields = oneLine.Split(',');
+                    if (fields.Length != 22) {
+                        log.writeLogWarning("非法记录行：" + oneLine);
+                        continue;
+                    }
+                    //解码开始时间(忽略结束时间)
+                    DateTime startTime = decodeDatetime(fields[6]);
+
+                    //根据时间计算出时间维度坐标
+                    int dimTimeValue;
+                    if (startTime.ToString("yyyyMMdd").Equals(currentDayString)) {
+                        dimTimeValue = 1;
+                    } else {
+                        dimTimeValue = 0;
+                    }
+
+                    //根据时间计算出时段维度坐标
+                    int dimDayHourValue = Convert.ToInt32(startTime.Hour) / 3; //目前分割为3小时一个时段
+
+                    //抓取数据
+                    //======================
+                    //12:L4_protocal L4协议类型：0：TCP；1：UDP >> 1位长度
+                    //15:UL_Data 上行流量；单位：字节 >> 整数
+                    //16:DL_Data 下行流量；单位：字节 >> 整数
+                    //17:UL_IP_Packet    上行IP包数 >> 整数
+                    //18:DL_IP_Packet    下行IP包数 >> 整数
+                    //19:TCP_Try_Cnt TCP建链尝试次数，一次TCP流多次SYN的数值; 非TCP传输时，此字段填0 >> 整数
+                    //20:TCP_Link_flag   TCP连接状态指示；0：成功；1：失败 >> 255代表什么？
+                    PhoneNumber.Item item = phoneNumberList.newItem();
+                    item.imsi = fields[1];
+                    item.phoneNumber = fields[2];
+                    item.apn = fields[4];
+                    if (fields[12].Equals("0")) { //tcp
+                        item.day[dimTimeValue].dayHour[dimDayHourValue].tcpUploadBytes = Convert.ToInt32(fields[15]);
+                        item.day[dimTimeValue].dayHour[dimDayHourValue].tcpDownloadBytes = Convert.ToInt32(fields[16]);
+                        item.day[dimTimeValue].dayHour[dimDayHourValue].tcpUploadPackets = Convert.ToInt32(fields[17]);
+                        item.day[dimTimeValue].dayHour[dimDayHourValue].tcpDownloadPackets = Convert.ToInt32(fields[18]);
+                        item.day[dimTimeValue].dayHour[dimDayHourValue].tcpRetryCount = Convert.ToInt32(fields[19]);
+                    } else if (fields[12].Equals("1")) { //udp
+                        item.day[dimTimeValue].dayHour[dimDayHourValue].udpUploadBytes = Convert.ToInt32(fields[15]);
+                        item.day[dimTimeValue].dayHour[dimDayHourValue].udpDownloadBytes = Convert.ToInt32(fields[16]);
+                        item.day[dimTimeValue].dayHour[dimDayHourValue].udpUploadPackets = Convert.ToInt32(fields[17]);
+                        item.day[dimTimeValue].dayHour[dimDayHourValue].udpDownloadPackets = Convert.ToInt32(fields[18]);
+                    } else {
+                        log.writeLogWarning("检测到未知类型的包结构：" + oneLine);
+                        continue;
+                    }
+
+                    //增加或者查找手机号码
+                    phoneNumberList.update(item);
+                    updateCount++;
+
+                    //ip地址问题, 数据方向问题，数据类型问题
+                }
+                buff = buff.Substring(lineStartPos);
+            }
+            fs.Close();
+            
+            //50. 高速缓存信息入库
+
+
+            //60. 更新当前日期序列号
 
             //100. 完成
 
-
+            log.writeLogWarning("第一步处理(day180)完成");
             return true;
         }
 
@@ -203,7 +455,8 @@ namespace import4D {
         }
 
         private void button2_Click(object sender, EventArgs e) {
-            forceExit = true;
+            forceExit = !forceExit;
+            log.writeLogCommon("设置强制退出模式为：" + forceExit.ToString());
         }
 
         private void button3_Click(object sender, EventArgs e) {
@@ -217,6 +470,35 @@ namespace import4D {
                 return;
             }
             log.writeLogWarning("数据库连接成功");
+        }
+
+        private void button4_Click(object sender, EventArgs e) {
+            skip = !skip;
+            log.writeLogCommon("设置skip模式为：" + skip.ToString());
+        }
+
+        /// <summary>解码并转换为北京时间</summary>
+        private DateTime decodeDatetime(string value) {
+            long a;
+            DateTime result = new DateTime(1970, 1, 1);
+            try {
+                a = Convert.ToInt64(value);
+            } catch {
+                return result;
+            }
+            return result.AddMilliseconds(a + 8 * 3600 * 1000); //东8区
+        }
+
+        private void button5_Click(object sender, EventArgs e) {
+            PhoneNumber p = new PhoneNumber();
+            p.init();
+            PhoneNumber.Item item = p.newItem();
+            PhoneNumber.Item x = item;
+            x.day[1].dayHour[3].tcpDownloadBytes = 100;
+            log.writeLogCommon(x.apn);
+            log.writeLogCommon(item.apn);
+
+
         }
     }
 }
