@@ -23,7 +23,16 @@ namespace import4D {
         }
 
         private void button1_Click(object sender, EventArgs e) {
-            testLoad();
+            DateTime startDay = new DateTime(2018, 4, 29);
+            int dayCount = 4;
+            log.writeLogWarning("====开始处理文件组，起始日期：" + startDay.ToString("yyyyMMdd") + "，处理天数：" + dayCount + "====");
+            for (int i = 0; i < dayCount; i++) {
+                string filename = "D:\\tam\\project\\nokiaBigData\\s1u_gen_konw_apn\\" +
+                    startDay.ToString("yyyyMMdd") + "_known_apn_s1u_general.csv";
+                startDay = startDay.AddDays(1);
+                loadFileToDB(filename);
+            }
+            log.writeLogWarning("====文件组处理完成，共处理天数：" + dayCount + "====");
         }
 
         private void Form1_Load(object sender, EventArgs e) {
@@ -48,11 +57,11 @@ namespace import4D {
             return value1.CompareTo(value2);
         }
 
-        private bool testLoad() {
-            string filename = "D:\\tam\\project\\nokiaBigData\\s1u_gen_konw_apn\\20180425_known_apn_s1u_general.csv";
+        private bool loadFileToDB(string filename) {
+            log.writeLogWarning("====开始处理文件，预计处理时间1小时：" + filename);
+
             System.IO.FileStream fs = null;
             System.IO.BinaryReader reader;
-
             //===============================
             //0:xDR_ID 一个会话生成一个xDR ID。>> 无用 >> ok
             //1:IMSI 用户IMSI（TBCD编码） >> 15位 >> ok
@@ -115,7 +124,7 @@ namespace import4D {
             reader = new System.IO.BinaryReader(fs, System.Text.Encoding.GetEncoding("GBK"));
             string buff = "";
             string oneLine;
-            int lineStartPos, sp, sp1;
+            int lineStartPos, sp;
             int buffSize = 10000;
             int batchCount = 0, linesCount = 0;
             Int64 bytesRead = 0;
@@ -153,7 +162,7 @@ namespace import4D {
                         log.writeLogWarning("非法记录行：" + oneLine);
                         continue;
                     }
-                    PhoneNumber.Item phoneNumberItem = new PhoneNumber.Item();
+                    PhoneNumber.Item phoneNumberItem = phoneNumberList.newItem();
                     phoneNumberItem.imsi = fields[1];
                     phoneNumberItem.phoneNumber = fields[2];
                     phoneNumberList.push(phoneNumberItem);
@@ -177,7 +186,7 @@ namespace import4D {
                 if (forceExit) break;
                 log.logDisplay.sameLine();
                 log.writeLogCommon(
-                    "初始化手机号:" + i.ToString("N0") + "/" + phoneNumberList.items.Count.ToString("N0")
+                    "初始化手机号:" + (i + 1).ToString("N0") + "/" + phoneNumberList.items.Count.ToString("N0")
                     );
                 if (!execSqlN(sql.ToString())) return false;
                 sql.Clear();
@@ -343,6 +352,8 @@ namespace import4D {
             linesCount = 0;
             sql.Clear();
             int updateCount = 0;
+            int outbound1 = 0;
+            int outbound2 = 0;
             while (true) {
                 Application.DoEvents();
                 if (forceExit) break;
@@ -352,7 +363,8 @@ namespace import4D {
                     log.writeLogCommon("批次:" + batchCount.ToString("N0") +
                         " / 处理字符:" + bytesRead / 1000000 + "M" +
                         " / 读取记录:" + linesCount.ToString("N0") +
-                        " / 手机号:" + phoneNumberList.items.Count.ToString("N0")
+                        " / 手机号:" + phoneNumberList.items.Count.ToString("N0") +
+                        " / 时间维度越界次数：" + outbound1 + "/" + outbound2
                         );
                 }
 
@@ -379,13 +391,13 @@ namespace import4D {
                     }
                     //解码开始时间(忽略结束时间)
                     DateTime startTime = decodeDatetime(fields[6]);
-
-                    //根据时间计算出时间维度坐标
-                    int dimTimeValue;
-                    if (startTime.ToString("yyyyMMdd").Equals(currentDayString)) {
-                        dimTimeValue = 1;
-                    } else {
-                        dimTimeValue = 0;
+                    startTime = startTime.AddMinutes(2); //增加x分钟的偏移校正
+                    if (startTime.ToString("yyyyMMdd").CompareTo(currentDayString) < 0) {
+                        startTime = DateTime.ParseExact(currentDayString, "yyyyMMdd", System.Globalization.CultureInfo.CurrentCulture);
+                        outbound1++;
+                    } else if (startTime.ToString("yyyyMMdd").CompareTo(currentDayString) > 0) {
+                        startTime = DateTime.ParseExact(currentDayString + "235959", "yyyyMMddHHmmss", System.Globalization.CultureInfo.CurrentCulture);
+                        outbound2++;
                     }
 
                     //根据时间计算出时段维度坐标
@@ -405,16 +417,16 @@ namespace import4D {
                     item.phoneNumber = fields[2];
                     item.apn = fields[4];
                     if (fields[12].Equals("0")) { //tcp
-                        item.day[dimTimeValue].dayHour[dimDayHourValue].tcpUploadBytes = Convert.ToInt32(fields[15]);
-                        item.day[dimTimeValue].dayHour[dimDayHourValue].tcpDownloadBytes = Convert.ToInt32(fields[16]);
-                        item.day[dimTimeValue].dayHour[dimDayHourValue].tcpUploadPackets = Convert.ToInt32(fields[17]);
-                        item.day[dimTimeValue].dayHour[dimDayHourValue].tcpDownloadPackets = Convert.ToInt32(fields[18]);
-                        item.day[dimTimeValue].dayHour[dimDayHourValue].tcpRetryCount = Convert.ToInt32(fields[19]);
+                        item.dayHour[dimDayHourValue].tcpUploadBytes = Convert.ToInt32(fields[15]);
+                        item.dayHour[dimDayHourValue].tcpDownloadBytes = Convert.ToInt32(fields[16]);
+                        item.dayHour[dimDayHourValue].tcpUploadPackets = Convert.ToInt32(fields[17]);
+                        item.dayHour[dimDayHourValue].tcpDownloadPackets = Convert.ToInt32(fields[18]);
+                        item.dayHour[dimDayHourValue].tcpRetryCount = Convert.ToInt32(fields[19]);
                     } else if (fields[12].Equals("1")) { //udp
-                        item.day[dimTimeValue].dayHour[dimDayHourValue].udpUploadBytes = Convert.ToInt32(fields[15]);
-                        item.day[dimTimeValue].dayHour[dimDayHourValue].udpDownloadBytes = Convert.ToInt32(fields[16]);
-                        item.day[dimTimeValue].dayHour[dimDayHourValue].udpUploadPackets = Convert.ToInt32(fields[17]);
-                        item.day[dimTimeValue].dayHour[dimDayHourValue].udpDownloadPackets = Convert.ToInt32(fields[18]);
+                        item.dayHour[dimDayHourValue].udpUploadBytes = Convert.ToInt32(fields[15]);
+                        item.dayHour[dimDayHourValue].udpDownloadBytes = Convert.ToInt32(fields[16]);
+                        item.dayHour[dimDayHourValue].udpUploadPackets = Convert.ToInt32(fields[17]);
+                        item.dayHour[dimDayHourValue].udpDownloadPackets = Convert.ToInt32(fields[18]);
                     } else {
                         log.writeLogWarning("检测到未知类型的包结构：" + oneLine);
                         continue;
@@ -431,14 +443,13 @@ namespace import4D {
             fs.Close();
 
             //45.计算数据库时间维度偏移量
-            int daySize = 90; //最多保留的天数
             if (!dimTime.search(currentDayString)) {
                 log.writeLogWarning("文件提取时间超出范围：" + currentDayString);
                 return false;
             }
             int dimTimeOffset = dimTime.pos;
-            dimTimeOffset--;
-            if (dimTimeOffset < 0) dimTimeOffset = daySize - 1;
+            //dimTimeOffset--;
+            //if (dimTimeOffset < 0) dimTimeOffset = daySize - 1;
             log.writeLogCommon("====45.计算数据库时间维度偏移量:" + dimTimeOffset + "====");
 
             //50. 高速缓存数据入库
@@ -450,7 +461,7 @@ namespace import4D {
                 if ((i % 500 == 0) || (i == phoneNumberList.items.Count - 1)) {
                     log.logDisplay.sameLine();
                     log.writeLogCommon(
-                        "正在入库高速缓存：" + i.ToString("N0") +
+                        "正在入库高速缓存：" + (i + 1).ToString("N0") +
                         " / " + phoneNumberList.items.Count.ToString("N0")
                         );
                     if (sql.Length > 0) {
@@ -467,28 +478,24 @@ namespace import4D {
                     );
 
                 //产生更新day180表的语句
-                for (int dayIndex = 0; dayIndex < 2; dayIndex++) {
-                    int dayIndexAbs = (dimTimeOffset + dayIndex) % daySize;
-                    for (int hourIndex = 0; hourIndex < 24 / 3; hourIndex++) {
-                        sql.Append(
-                            "update apnDay180 set " +
-                            " tcpUploadBytes=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].tcpUploadBytes +
-                            ",tcpDownloadBytes=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].tcpDownloadBytes +
-                            ",udpUploadBytes=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].udpUploadBytes +
-                            ",udpDownloadBytes=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].udpDownloadBytes +
-                            ",tcpUploadPackets=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].tcpUploadPackets +
-                            ",tcpDownloadPackets=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].tcpDownloadPackets +
-                            ",udpUploadPackets=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].udpUploadPackets +
-                            ",udpDownloadPackets=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].udpDownloadPackets +
-                            ",tcpRetryCount=" + phoneNumberList.items[i].day[dayIndex].dayHour[hourIndex].tcpRetryCount +
-                            " where imsi='" + phoneNumberList.items[i].imsi + "'" +
-                            " and dayIndex=" + dayIndexAbs +
-                            " and dayHour=" + hourIndex +
-                            ";\r\n"
-                            );
-                    }
+                for (int hourIndex = 0; hourIndex < 24 / 3; hourIndex++) {
+                    sql.Append(
+                        "update apnDay180 set " +
+                        " tcpUploadBytes=" + phoneNumberList.items[i].dayHour[hourIndex].tcpUploadBytes +
+                        ",tcpDownloadBytes=" + phoneNumberList.items[i].dayHour[hourIndex].tcpDownloadBytes +
+                        ",udpUploadBytes=" + phoneNumberList.items[i].dayHour[hourIndex].udpUploadBytes +
+                        ",udpDownloadBytes=" + phoneNumberList.items[i].dayHour[hourIndex].udpDownloadBytes +
+                        ",tcpUploadPackets=" + phoneNumberList.items[i].dayHour[hourIndex].tcpUploadPackets +
+                        ",tcpDownloadPackets=" + phoneNumberList.items[i].dayHour[hourIndex].tcpDownloadPackets +
+                        ",udpUploadPackets=" + phoneNumberList.items[i].dayHour[hourIndex].udpUploadPackets +
+                        ",udpDownloadPackets=" + phoneNumberList.items[i].dayHour[hourIndex].udpDownloadPackets +
+                        ",tcpRetryCount=" + phoneNumberList.items[i].dayHour[hourIndex].tcpRetryCount +
+                        " where imsi='" + phoneNumberList.items[i].imsi + "'" +
+                        " and dayIndex=" + dimTimeOffset +
+                        " and dayHour=" + hourIndex +
+                        ";\r\n"
+                        );
                 }
-
             }
 
 
@@ -504,6 +511,7 @@ namespace import4D {
         /// <summary>执行一个无返回值的sql语句</summary>
         private bool execSqlN(string sql) {
             OdbcCommand cmd = new OdbcCommand();
+            cmd.CommandTimeout = 300;
             cmd.Connection = odbcConnection;
             cmd.CommandText = sql;
             try {
@@ -552,14 +560,6 @@ namespace import4D {
         }
 
         private void button5_Click(object sender, EventArgs e) {
-            PhoneNumber p = new PhoneNumber();
-            p.init();
-            PhoneNumber.Item item = p.newItem();
-            PhoneNumber.Item x = item;
-            x.day[1].dayHour[3].tcpDownloadBytes = 100;
-            log.writeLogCommon(x.apn);
-            log.writeLogCommon(item.apn);
-
 
         }
     }

@@ -4592,7 +4592,7 @@ namespace TamPub1 {
                     sb.Append(retVal[i].ToString("x2"));
                 }
                 return sb.ToString();
-            } catch (Exception ex) {
+            } catch {
                 return "";
             }
         }

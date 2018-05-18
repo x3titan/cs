@@ -11,9 +11,6 @@ namespace import4D {
             public string imsi;
             public string phoneNumber;
             public string apn;
-            public Day[] day;
-        }
-        public struct Day {
             public DayHour[] dayHour;
         }
         public struct DayHour {
@@ -45,20 +42,17 @@ namespace import4D {
             item.imsi = "";
             item.phoneNumber = "";
             item.apn = "";
-            item.day = new Day[2];
-            for (int i = 0; i < item.day.Length; i++) {
-                item.day[i].dayHour = new DayHour[24 / 3];
-                for (int j = 0; j < item.day[i].dayHour.Length; j++) {
-                    item.day[i].dayHour[j].tcpDownloadBytes = 0;
-                    item.day[i].dayHour[j].tcpDownloadPackets = 0;
-                    item.day[i].dayHour[j].tcpRetryCount = 0;
-                    item.day[i].dayHour[j].tcpUploadBytes = 0;
-                    item.day[i].dayHour[j].tcpUploadPackets = 0;
-                    item.day[i].dayHour[j].udpDownloadBytes = 0;
-                    item.day[i].dayHour[j].udpDownloadPackets = 0;
-                    item.day[i].dayHour[j].udpUploadBytes = 0;
-                    item.day[i].dayHour[j].udpUploadPackets = 0;
-                }
+            item.dayHour = new DayHour[24 / 3];
+            for (int j = 0; j < item.dayHour.Length; j++) {
+                item.dayHour[j].tcpDownloadBytes = 0;
+                item.dayHour[j].tcpDownloadPackets = 0;
+                item.dayHour[j].tcpRetryCount = 0;
+                item.dayHour[j].tcpUploadBytes = 0;
+                item.dayHour[j].tcpUploadPackets = 0;
+                item.dayHour[j].udpDownloadBytes = 0;
+                item.dayHour[j].udpDownloadPackets = 0;
+                item.dayHour[j].udpUploadBytes = 0;
+                item.dayHour[j].udpUploadPackets = 0;
             }
             return item;
         }
@@ -75,18 +69,16 @@ namespace import4D {
                 Item temp = speedSearch.buff[speedSearch.pos];
                 temp.apn = item.apn;
                 if (temp.phoneNumber.Length <= 0) temp.phoneNumber = item.phoneNumber;
-                for (int i = 0; i < 2; i++) {
-                    for (int j = 0; j < 24 / 3; j++) {
-                        temp.day[i].dayHour[j].tcpDownloadBytes += item.day[i].dayHour[j].tcpDownloadBytes;
-                        temp.day[i].dayHour[j].tcpDownloadPackets += item.day[i].dayHour[j].tcpDownloadPackets;
-                        temp.day[i].dayHour[j].tcpRetryCount += item.day[i].dayHour[j].tcpRetryCount;
-                        temp.day[i].dayHour[j].tcpUploadBytes += item.day[i].dayHour[j].tcpUploadBytes;
-                        temp.day[i].dayHour[j].tcpUploadPackets += item.day[i].dayHour[j].tcpUploadPackets;
-                        temp.day[i].dayHour[j].udpDownloadBytes += item.day[i].dayHour[j].udpDownloadBytes;
-                        temp.day[i].dayHour[j].udpDownloadPackets += item.day[i].dayHour[j].udpDownloadPackets;
-                        temp.day[i].dayHour[j].udpUploadBytes += item.day[i].dayHour[j].udpUploadBytes;
-                        temp.day[i].dayHour[j].udpUploadPackets += item.day[i].dayHour[j].udpUploadPackets;
-                    }
+                for (int j = 0; j < 24 / 3; j++) {
+                    temp.dayHour[j].tcpDownloadBytes += item.dayHour[j].tcpDownloadBytes;
+                    temp.dayHour[j].tcpDownloadPackets += item.dayHour[j].tcpDownloadPackets;
+                    temp.dayHour[j].tcpRetryCount += item.dayHour[j].tcpRetryCount;
+                    temp.dayHour[j].tcpUploadBytes += item.dayHour[j].tcpUploadBytes;
+                    temp.dayHour[j].tcpUploadPackets += item.dayHour[j].tcpUploadPackets;
+                    temp.dayHour[j].udpDownloadBytes += item.dayHour[j].udpDownloadBytes;
+                    temp.dayHour[j].udpDownloadPackets += item.dayHour[j].udpDownloadPackets;
+                    temp.dayHour[j].udpUploadBytes += item.dayHour[j].udpUploadBytes;
+                    temp.dayHour[j].udpUploadPackets += item.dayHour[j].udpUploadPackets;
                 }
                 speedSearch.buff[speedSearch.pos] = temp;
             } else {
