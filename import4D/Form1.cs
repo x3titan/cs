@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Data.Odbc;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -560,6 +561,96 @@ namespace import4D {
         }
 
         private void button5_Click(object sender, EventArgs e) {
+
+        }
+
+        private void button6_Click(object sender, EventArgs e) {
+            //2-9]
+            log.writeLogCommon("启动数据库查询，后续时间会比较长，请耐心等待...");
+            Application.DoEvents();
+            TamPub1.FileOperation csv = new TamPub1.FileOperation();
+            OdbcCommand cmd = new OdbcCommand();
+            cmd.CommandTimeout = 60 * 30;
+            cmd.Connection = odbcConnection;
+            cmd.CommandText =
+                "SELECT dbo.apnDay180.imsi, dbo.apnDay180.dayIndex, dbo.apnDay180.dayHour, " +
+                "                dbo.apnDay180.tcpUploadBytes, dbo.apnDay180.tcpDownloadBytes, dbo.apnDay180.udpUploadBytes, " +
+                "                dbo.apnDay180.udpDownloadBytes, dbo.apnDay180.tcpUploadPackets, dbo.apnDay180.tcpDownloadPackets, " +
+                "                dbo.apnDay180.udpUploadPackets, dbo.apnDay180.udpDownloadPackets, dbo.apnDay180.tcpRetryCount, " +
+                "                dbo.apnInfo.apnName, dbo.apnInfo.apnDisplayName, dbo.apnInfo.apnType " +
+                "FROM      dbo.apnInfo RIGHT OUTER JOIN " +
+                "                dbo.imsiInfo ON dbo.apnInfo.id = dbo.imsiInfo.apnIndex RIGHT OUTER JOIN " +
+                "                dbo.apnDay180 ON dbo.imsiInfo.imsi COLLATE Chinese_PRC_CS_AS = dbo.apnDay180.imsi " +
+                "WHERE(dbo.apnDay180.dayIndex >= 2) AND(dbo.apnDay180.dayIndex <= 9) " +
+                "ORDER BY dbo.imsiInfo.imsi, dbo.apnDay180.dayIndex, dbo.apnDay180.dayHour ";
+            try {
+                OdbcDataReader sqlResult = cmd.ExecuteReader();
+                csv.textCoding = "gb2312";
+                csv.filename = "D:\\tam\\project\\nokiaBigData\\spyderAI\\ai\\data\\day8.csv";
+                log.writeLogCommon("========数据库查询完毕，开始生成文件:" + csv.filename);
+                File.Delete(csv.filename);
+                csv.openAppend();
+                csv.writeEncodingHeader();
+                StringBuilder s = new StringBuilder();
+                string imsiLast = "";
+                string imsiCurrent = "";
+                int recordCount = 0;
+                while (sqlResult.Read()) {
+                    if (skip) break;
+                    if (forceExit) break;
+                    recordCount++;
+                    imsiCurrent = Convert.ToString(sqlResult["imsi"]);
+                    if (imsiLast.Length <= 0) imsiLast = imsiCurrent;
+                    if (!imsiLast.Equals(imsiCurrent)) {
+                        s.Append("\r\n");
+                        csv.writeFixedStringEx(s.ToString());
+                        s.Clear();
+                        string apnName = Convert.ToString(sqlResult["apnName"]);
+                        if (apnName.Length <= 0) {
+                            s.Append(
+                                imsiCurrent +
+                                "," + "unknow" +
+                                "," + "未知" +
+                                ",0"
+                                );
+                        } else {
+                            s.Append(
+                                imsiCurrent +
+                                "," + Convert.ToString(sqlResult["apnName"]) +
+                                "," + Convert.ToString(sqlResult["apnDisplayName"]) +
+                                "," + Convert.ToString(sqlResult["apnType"])
+                                );
+                        }
+                    } else {
+                        s.Append(
+                            "," + Convert.ToString(sqlResult["tcpUploadBytes"]) +
+                            "," + Convert.ToString(sqlResult["tcpDownloadBytes"]) +
+                            "," + Convert.ToString(sqlResult["udpUploadBytes"]) +
+                            "," + Convert.ToString(sqlResult["udpDownloadBytes"]) +
+                            "," + Convert.ToString(sqlResult["tcpUploadPackets"]) +
+                            "," + Convert.ToString(sqlResult["tcpDownloadPackets"]) +
+                            "," + Convert.ToString(sqlResult["udpUploadPackets"]) +
+                            "," + Convert.ToString(sqlResult["udpDownloadPackets"]) +
+                            "," + Convert.ToString(sqlResult["tcpRetryCount"])
+                            );
+                    }
+                    imsiLast = imsiCurrent;
+                    if (recordCount % 50000 == 0) {
+                        log.logDisplay.sameLine();
+                        log.writeLogCommon("正在生成csv文件：" + recordCount.ToString("N0"));
+                        Application.DoEvents();
+                    }
+                }
+                csv.close();
+                sqlResult.Close();
+            } catch (Exception ee) {
+                csv.close();
+                log.writeLogWarning("数据库执行错误，准备执行重置操作。errorString=" + ee.Message + ",sql=" + cmd.CommandText);
+                odbcConnection.Close();
+                return;
+            }
+            log.writeLogCommon("========处理完毕");
+
 
         }
     }
