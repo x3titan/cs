@@ -566,7 +566,8 @@ namespace import4D {
 
         private void button6_Click(object sender, EventArgs e) {
             //2-9]
-            log.writeLogCommon("启动数据库查询，后续时间会比较长，请耐心等待...");
+            bool testMode = true;
+            log.writeLogCommon("启动数据库查询，后续处理时间约30秒，请耐心等待...");
             Application.DoEvents();
             TamPub1.FileOperation csv = new TamPub1.FileOperation();
             OdbcCommand cmd = new OdbcCommand();
@@ -577,7 +578,7 @@ namespace import4D {
                 "                dbo.apnDay180.tcpUploadBytes, dbo.apnDay180.tcpDownloadBytes, dbo.apnDay180.udpUploadBytes, " +
                 "                dbo.apnDay180.udpDownloadBytes, dbo.apnDay180.tcpUploadPackets, dbo.apnDay180.tcpDownloadPackets, " +
                 "                dbo.apnDay180.udpUploadPackets, dbo.apnDay180.udpDownloadPackets, dbo.apnDay180.tcpRetryCount, " +
-                "                dbo.apnInfo.apnName, dbo.apnInfo.apnDisplayName, dbo.apnInfo.apnType " +
+                "                dbo.apnInfo.apnName, dbo.apnInfo.apnDisplayName, dbo.apnInfo.apnType, dbo.apnInfo.id AS apnCode " +
                 "FROM      dbo.apnInfo RIGHT OUTER JOIN " +
                 "                dbo.imsiInfo ON dbo.apnInfo.id = dbo.imsiInfo.apnIndex RIGHT OUTER JOIN " +
                 "                dbo.apnDay180 ON dbo.imsiInfo.imsi COLLATE Chinese_PRC_CS_AS = dbo.apnDay180.imsi " +
@@ -586,7 +587,11 @@ namespace import4D {
             try {
                 OdbcDataReader sqlResult = cmd.ExecuteReader();
                 csv.textCoding = "gb2312";
-                csv.filename = "D:\\tam\\project\\nokiaBigData\\spyderAI\\ai\\data\\day8.csv";
+                if (testMode) {
+                    csv.filename = "D:\\tam\\project\\nokiaBigData\\spyderAI\\ai\\data\\day8test.csv";
+                } else {
+                    csv.filename = "D:\\tam\\project\\nokiaBigData\\spyderAI\\ai\\data\\day8.csv";
+                }
                 log.writeLogCommon("========数据库查询完毕，开始生成文件:" + csv.filename);
                 File.Delete(csv.filename);
                 csv.openAppend();
@@ -599,6 +604,7 @@ namespace import4D {
                     if (skip) break;
                     if (forceExit) break;
                     recordCount++;
+                    if (testMode && recordCount > 9 * 8 * 8 * 100) break;
                     imsiCurrent = Convert.ToString(sqlResult["imsi"]);
                     if (imsiLast.Length <= 0) imsiLast = imsiCurrent;
                     if (!imsiLast.Equals(imsiCurrent)) {
@@ -611,29 +617,29 @@ namespace import4D {
                                 imsiCurrent +
                                 "," + "unknow" +
                                 "," + "未知" +
-                                ",0"
+                                ",未知,0"
                                 );
                         } else {
                             s.Append(
                                 imsiCurrent +
                                 "," + Convert.ToString(sqlResult["apnName"]) +
                                 "," + Convert.ToString(sqlResult["apnDisplayName"]) +
-                                "," + Convert.ToString(sqlResult["apnType"])
+                                "," + Convert.ToString(sqlResult["apnType"]) +
+                                "," + Convert.ToString(sqlResult["apnCode"])
                                 );
                         }
-                    } else {
-                        s.Append(
-                            "," + Convert.ToString(sqlResult["tcpUploadBytes"]) +
-                            "," + Convert.ToString(sqlResult["tcpDownloadBytes"]) +
-                            "," + Convert.ToString(sqlResult["udpUploadBytes"]) +
-                            "," + Convert.ToString(sqlResult["udpDownloadBytes"]) +
-                            "," + Convert.ToString(sqlResult["tcpUploadPackets"]) +
-                            "," + Convert.ToString(sqlResult["tcpDownloadPackets"]) +
-                            "," + Convert.ToString(sqlResult["udpUploadPackets"]) +
-                            "," + Convert.ToString(sqlResult["udpDownloadPackets"]) +
-                            "," + Convert.ToString(sqlResult["tcpRetryCount"])
-                            );
                     }
+                    s.Append(
+                        "," + Convert.ToString(sqlResult["tcpUploadBytes"]) +
+                        "," + Convert.ToString(sqlResult["tcpDownloadBytes"]) +
+                        "," + Convert.ToString(sqlResult["udpUploadBytes"]) +
+                        "," + Convert.ToString(sqlResult["udpDownloadBytes"]) +
+                        "," + Convert.ToString(sqlResult["tcpUploadPackets"]) +
+                        "," + Convert.ToString(sqlResult["tcpDownloadPackets"]) +
+                        "," + Convert.ToString(sqlResult["udpUploadPackets"]) +
+                        "," + Convert.ToString(sqlResult["udpDownloadPackets"]) +
+                        "," + Convert.ToString(sqlResult["tcpRetryCount"])
+                        );
                     imsiLast = imsiCurrent;
                     if (recordCount % 50000 == 0) {
                         log.logDisplay.sameLine();
@@ -641,6 +647,8 @@ namespace import4D {
                         Application.DoEvents();
                     }
                 }
+                log.writeLogCommon("数据扫描完毕，等待写入剩余缓存");
+                Application.DoEvents();
                 csv.close();
                 sqlResult.Close();
             } catch (Exception ee) {
